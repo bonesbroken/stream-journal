@@ -1,0 +1,46 @@
+{
+    "version": "0.1",
+    "name": "StreamJournal",
+    "buildPath": "dist/",
+    "permissions": ["slobs.scenes-sources"],
+    "supportedPlatforms": ["twitch", "youtube", "facebook"],
+    "icon": "./images/app-sq.jpg",
+    "sources": [
+      {
+        "type": "browser_source",
+        "name": "StreamJournal",
+        "id": "bb-stream-journal",
+        "about": {
+          "description": "Takes notes, set goals, and interact with fans!",
+          "bullets": [
+            "Take notes during your stream",
+            "Let your fans sign your journals",
+            "Set Tasks",
+            "Create Goals",
+            "Create To-Do Lists",
+            "Set Reminders"
+          ],
+          "bannerImage": "./images/app-icon.jpg"
+        },
+        "file": "index.html",
+        "initialSize": {
+          "type": "absolute",
+          "width": 600,
+          "height": 600
+        },
+        "redirectPropertiesToTopNavSlot": false
+      }
+    ],
+    "pages": [
+      {
+        "slot": "top_nav",
+        "file": "settings.html",
+        "persistent": true,
+        "allowPopout": true,
+        "popOutSize": {
+          "width": 600,
+          "height": 600
+        }
+      }
+    ]
+  }

@@ -1,0 +1,732 @@
+<!doctype html>
+<html class="sl-theme-dark" style="height: 100%;">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stream Journal</title>
+    <script src="https://cdn.streamlabs.com/slobs-platform/lib/streamlabs-platform.min.js"></script>
+
+    <style>
+    * {
+      font-family: var(--sl-font-sans);
+      box-sizing: inherit;
+    }
+
+    html {
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: visible;
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: var(--sl-color-neutral-50);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #addAppSource, #saveAppSource {
+      box-sizing: border-box;
+    }
+    #appAppSource {
+      flex: 1;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    #group {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    #webcamCanvas {
+      width: 600px;
+      height: 600px;
+      border: 1px solid var(--sl-color-neutral-300);
+    }
+
+    #webcamCanvas, #webcamCanvasStep2 {
+      background-image: 
+        linear-gradient(45deg, #242427 25%, transparent 25%), 
+        linear-gradient(-45deg, #242427 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #242427 75%), 
+        linear-gradient(-45deg, transparent 75%, #242427 75%);
+      background-size: 40px 40px;
+      background-position: 0 0, 0 20px, 20px -20px, -20px 0px;
+    }
+
+    .settings-panel {
+      border-radius: 0.25rem;
+      flex: 1;
+      width: 250px;
+      height: 200px;
+    }
+
+    sl-input {
+      flex: 1;
+    }
+    .setting-group {
+      display: flex;
+      flex-direction: row;
+      gap: 0.5rem;
+      align-items: center;
+      box-sizing: border-box;
+
+      & > sl-range {
+        flex: 1;
+      }
+
+      & > sl-color-picker {
+        flex: 1 1 50%;
+      }
+
+      & > sl-select {
+        flex: 1;
+      }
+
+      & > sl-tooltip {
+        flex: 1;
+      }
+
+      & span {
+        color: var(--sl-color-neutral-600);
+        font-size: var(--sl-font-size-medium);
+        flex: 1;
+
+        & sl-icon {
+          padding-right: 0.25rem; 
+        }
+      }
+
+      & span.expand {
+        flex: 1 1 0%;
+      }
+    }
+
+    .color-picker {
+      padding: 0;
+
+      & > sl-color-picker {
+        flex: none;
+      }
+    }
+    
+    sl-range, sl-select {
+      padding: 0.5rem 0;
+      flex: 1;
+
+      &::part(form-control-label) {
+        color: var(--sl-color-neutral-600);
+      }
+    }
+
+    sl-checkbox {
+      display: block;
+      padding: 0.1rem 0.5rem;
+    }
+
+    sl-details {
+      &::part(base) {
+        border: solid 1px #2b2e37;
+        background-color: #0f1219;
+      }
+    }
+
+    sl-details.custom-icons::part(summary-icon) {
+      /* Disable the expand/collapse animation */
+      rotate: none;
+    }
+
+    sl-color-picker {
+      box-sizing: border-box;
+    }
+
+    .component-image-container {
+      display: flex;
+      align-items: center;
+      flex-grow: 1;
+      gap: 1rem;
+
+      & > sl-button {
+        box-sizing: border-box;
+        flex-grow: 1;
+      }
+    }
+
+    .setting-group-3 {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      align-items: center;
+      width: 100%;
+    }
+
+    .alert-container {
+      position: absolute;
+      top: 0;
+      right: 0;
+      margin: 2rem;
+      z-index: 10;
+    }
+
+    .close-button {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 1001;
+    }
+
+    /* Wizard Styles */
+    .wizard-container {
+      width: 100%;
+      background: var(--sl-color-neutral-0);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+
+    .wizard-step {
+      display: none;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    .wizard-step.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .step-header {
+      text-align: center;
+      margin-bottom: 2rem;
+      color: var(--sl-color-neutral-700);
+    }
+
+    .step-title {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      color: var(--sl-color-primary-500);
+    }
+
+    .step-subtitle {
+      font-size: 1rem;
+      color: var(--sl-color-neutral-400);
+    }
+
+    .option-grid {
+      display: flex;
+      flex-direction: row;
+      gap: 1rem;
+      margin: 2rem 0;
+      justify-content: center;
+    }
+
+    .option-card {
+      border: 2px solid var(--sl-color-neutral-300);
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: var(--sl-color-neutral-0);
+      color: var(--sl-color-neutral-700);
+      flex: 1;
+      min-width: 200px;
+      max-width: 300px;
+    }
+
+    .option-card:hover {
+      border-color: var(--sl-color-primary-500);
+      background: var(--sl-color-primary-50);
+      color: var(--sl-color-neutral-900);
+    }
+
+    .option-card.selected {
+      border-color: var(--sl-color-primary-500);
+      background: var(--sl-color-primary-100);
+      color: var(--sl-color-primary-800);
+    }
+
+    .option-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      color: var(--sl-color-primary-500);
+    }
+
+    .navigation-buttons {
+      position: absolute;
+      right: 0;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .preview-container {
+      display: flex;
+      gap: 2rem;
+      align-items: flex-start;
+    }
+
+    .settings-section {
+        flex: 1;
+        max-width: 450px;
+        gap: 0.5em;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Scene Selection Modal */
+    .scene-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .scene-modal.active {
+      display: flex;
+    }
+
+    .scene-modal-content {
+      background: var(--sl-color-neutral-0);
+      border: 1px solid var(--sl-color-neutral-300);
+      border-radius: 8px;
+      padding: 2rem;
+      max-width: 800px;
+      width: 90%;
+      max-height: 80%;
+      overflow: hidden;
+      box-shadow: var(--sl-shadow-large);
+    }
+
+    .scene-modal-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .scene-modal-title {
+      font-size: 1.5rem;
+      color: var(--sl-color-primary-500);
+      margin-bottom: 0.5rem;
+    }
+
+    .scene-modal-subtitle {
+      color: var(--sl-color-neutral-600);
+    }
+
+    .scene-selection-container {
+      display: flex;
+      gap: 2rem;
+      height: 400px;
+    }
+
+    .scene-column {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .column-header {
+      font-weight: bold;
+      color: var(--sl-color-neutral-700);
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--sl-color-neutral-300);
+    }
+
+    .scene-list, .source-list {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid var(--sl-color-neutral-300);
+      border-radius: 4px;
+      background: var(--sl-color-neutral-50);
+    }
+
+    .scene-item, .source-item {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--sl-color-neutral-200);
+      cursor: pointer;
+      transition: background 0.2s ease;
+      color: var(--sl-color-neutral-700);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .scene-item sl-badge {
+      margin-left: 1rem;
+    }
+
+    .scene-item:hover {
+      background: var(--sl-color-neutral-100);
+    }
+
+    .scene-item.active {
+      background: var(--sl-color-primary-50);
+      color: var(--sl-color-primary-700);
+      border-left: 3px solid var(--sl-color-primary-500);
+    }
+
+    .scene-item.selected {
+      background: var(--sl-color-neutral-200);
+      color: var(--sl-color-neutral-1000);
+    }
+
+    .source-item {
+      cursor: default;
+    }
+
+    .scene-modal-actions {
+      margin-top: 2rem;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .scene-modal-confirm {
+      display: block;
+    }
+
+    .scene-modal-confirm.visible {
+      display: block;
+    }
+
+    /* Selected shape icon button styling */
+    sl-icon-button[data-shape][name$="-half"] {
+      --sl-color-neutral-700: var(--sl-color-primary-500);
+      color: var(--sl-color-primary-500) !important;
+      background: var(--sl-color-primary-50);
+      border: 1px solid var(--sl-color-primary-200);
+      border-radius: 4px;
+    }
+
+    sl-icon-button[data-shape][name$="-half"]:hover {
+      background: var(--sl-color-primary-100);
+      border-color: var(--sl-color-primary-300);
+    }
+
+    /* Journal Grid Styles */
+    .journal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      width: 100%;
+    }
+
+    .journal-card {
+      border: 2px solid var(--sl-color-neutral-300);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: var(--sl-color-neutral-0);
+      color: var(--sl-color-neutral-700);
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .journal-card:hover {
+      border-color: var(--sl-color-primary-500);
+      background: var(--sl-color-primary-25);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .journal-card.create-new {
+      border-style: dashed;
+      border-color: var(--sl-color-primary-400);
+      background: var(--sl-color-primary-25);
+    }
+
+    .journal-card.create-new:hover {
+      border-color: var(--sl-color-primary-600);
+      background: var(--sl-color-primary-50);
+    }
+
+    .journal-card.selected {
+      border-color: var(--sl-color-primary-500);
+      background: var(--sl-color-primary-100);
+      color: var(--sl-color-primary-800);
+    }
+
+    .journal-icon {
+      margin-bottom: 1rem;
+    }
+
+    .journal-card h3 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--sl-color-neutral-800);
+    }
+
+    .journal-card p {
+      margin: 0 0 1rem 0;
+      font-size: 0.85rem;
+      color: var(--sl-color-neutral-600);
+      line-height: 1.4;
+    }
+
+    @media (max-width: 768px) {
+      .journal-grid {
+        grid-template-columns: 1fr;
+        max-width: 400px;
+      }
+    }
+
+    /* Pagination Styles */
+    .pagination-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1rem;
+      padding: 1rem 0;
+      border-top: 1px solid var(--sl-color-neutral-300);
+      width: 100%;
+    }
+
+    .pagination-info {
+      color: var(--sl-color-neutral-600);
+      font-size: var(--sl-font-size-small);
+    }
+
+    .pagination-buttons {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .pagination-controls {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+      }
+      
+      .pagination-buttons {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+
+    /* Journal View Styles */
+    .journal-header {
+      margin-bottom: 2rem;
+      color: var(--sl-color-neutral-700);
+    }
+
+    .journal-header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .journal-title {
+      font-size: 2rem;
+      margin: 0.5rem 0;
+      color: var(--sl-color-primary-500);
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .journal-date {
+      font-size: 1rem;
+      color: var(--sl-color-neutral-500);
+      margin: 0 0 1rem 0;
+      font-style: italic;
+      text-align: center;
+    }
+
+    .journal-content {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 1rem;
+    }
+
+    #journalEntries {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .journal-entry {
+      background: var(--sl-color-neutral-0);
+      border: 1px solid var(--sl-color-neutral-300);
+      border-radius: 8px;
+      padding: 1rem;
+      transition: all 0.2s ease;
+    }
+
+    .journal-entry:hover {
+      border-color: var(--sl-color-primary-300);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .journal-entry-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--sl-color-neutral-200);
+    }
+
+    .journal-entry-type {
+      font-size: var(--sl-font-size-small);
+      color: var(--sl-color-neutral-600);
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    .journal-entry-time {
+      font-size: var(--sl-font-size-small);
+      color: var(--sl-color-neutral-500);
+    }
+
+    .journal-entry-content {
+      color: var(--sl-color-neutral-700);
+      line-height: 1.5;
+    }
+    </style>
+  </head>
+  <body>
+    <sl-button id="closeApp" class="close-button" variant="default" size="small" outline>
+      <sl-icon slot="prefix" name="x"></sl-icon>
+    </sl-button>
+    
+    <div class="alert-container">
+      <sl-alert id="generalAlert" variant="primary" duration="10000" countdown="rtl" closable>
+        <sl-icon slot="icon" name="info-circle"></sl-icon>
+        <strong class="alert-title">Settings deleted!</strong><br />
+        <div class="alert-content">Your Keyboard Settings have been deleted and reset.</div>
+      </sl-alert>
+    </div>
+    <div id="group">
+      <div class="wizard-container">
+        
+        <!-- Step 1: Basic Configuration -->
+        <div class="wizard-step active" id="step1">
+          <div class="step-header">
+            <h1 class="step-title">Stream Journal</h1>
+            <p class="step-subtitle">Take notes during your stream. Set Goals and Tasks, create To-Do Lists, set Reminders, and more.</p>
+          </div>
+          
+          <div class="journal-grid">
+            <div class="journal-card create-new" id="createNewJournal">
+              <div class="journal-icon">
+                <sl-icon name="plus-circle" style="font-size: 3rem; color: var(--sl-color-primary-500);" aria-hidden="true" library="default"></sl-icon>
+              </div>
+              <h3>Create New Journal</h3>
+              <p>Start a fresh journal for your stream</p>
+            </div>
+            
+          </div>
+          
+        </div>
+        
+        <!-- Journal View Step -->
+        <div class="wizard-step" id="journalView">
+          <div class="journal-header">
+            <div class="journal-header-top">
+              <sl-button id="backToJournalList" variant="neutral" size="small">
+                <sl-icon slot="prefix" name="arrow-left"></sl-icon>Back to Journals
+              </sl-button>
+              <sl-button id="deleteCurrentJournal" variant="danger" size="small" outline>
+                <sl-icon slot="prefix" name="trash"></sl-icon>
+              </sl-button>
+            </div>
+            <h1 class="journal-title" id="journalTitle">Journal Name</h1>
+            <p class="journal-date" id="journalDate">Creation Date</p>
+          </div>
+          
+          <div class="journal-content">
+            <div id="journalEntries">
+              <!-- Journal entries will be populated here -->
+            </div>
+          </div>
+      
+        </div>
+    </div>
+
+    <!-- Scene Selection Modal -->
+    <div id="sceneModal" class="scene-modal">
+      <div class="scene-modal-content">
+        <div class="scene-modal-header">
+          <h2 class="scene-modal-title">Choose Source Location</h2>
+          <p class="scene-modal-subtitle">Add <span id="sourceTypeInSubtitle">source</span> to your scene. Select from your existing scenes below.</p>
+        </div>
+        
+        <div class="scene-selection-container">
+          <div class="scene-column">
+            <div class="column-header">Scenes</div>
+            <div class="scene-list" id="sceneList">
+              <!-- Scenes will be populated here -->
+            </div>
+          </div>
+        </div>
+        
+        <div class="scene-modal-actions">
+          <sl-button id="cancelSceneModal" variant="neutral" size="medium">
+            Cancel
+          </sl-button>
+          <sl-button id="confirmAddSource" class="scene-modal-confirm" variant="success" size="medium">
+            <sl-icon slot="prefix" name="plus-square"></sl-icon>Add <span id="sourceTypeInButton">Source</span>
+          </sl-button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Create Journal Modal -->
+    <div id="createJournalModal" class="scene-modal">
+      <div class="scene-modal-content" style="max-width: 500px;">
+        <div class="scene-modal-header">
+          <h2 class="scene-modal-title">Create New Journal</h2>
+          <p class="scene-modal-subtitle">Enter a name for your new stream journal</p>
+        </div>
+        
+        <div style="margin: 2rem 0;">
+          <sl-input 
+            id="journalNameInput" 
+            label="Journal Name" 
+            placeholder="My Stream Journal"
+            value=""
+            style="width: 100%;"
+            maxlength="50"
+            required>
+          </sl-input>
+        </div>
+        
+        <div class="scene-modal-actions">
+          <sl-button id="cancelCreateJournal" variant="neutral" size="medium">
+            Cancel
+          </sl-button>
+          <sl-button id="confirmCreateJournal" variant="success" size="medium">
+            <sl-icon slot="prefix" name="plus-square"></sl-icon>Create Journal
+          </sl-button>
+        </div>
+      </div>
+    </div>
+    
+  </body>
+</html>
