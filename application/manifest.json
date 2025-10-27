@@ -1,6 +1,6 @@
 {
     "version": "0.1",
-    "name": "StreamJournal",
+    "name": "StreamNotes",
     "buildPath": "dist/",
     "permissions": ["slobs.scenes-sources"],
     "supportedPlatforms": ["twitch", "youtube", "facebook"],
@@ -8,17 +8,16 @@
     "sources": [
       {
         "type": "browser_source",
-        "name": "StreamJournal",
-        "id": "bb-stream-journal",
+        "name": "StreamNotes",
+        "id": "bb-stream-notepad",
         "about": {
-          "description": "Takes notes, set goals, and interact with fans!",
+          "description": "Takes notes, creates goals, and interact with fans!",
           "bullets": [
             "Take notes during your stream",
             "Let your fans sign your journals",
-            "Set Tasks",
-            "Create Goals",
+            "Set Goals",
             "Create To-Do Lists",
-            "Set Reminders"
+            "Make Reminders"
           ],
           "bannerImage": "./images/app-icon.jpg"
         },
