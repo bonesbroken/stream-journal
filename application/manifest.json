@@ -14,9 +14,9 @@
           "description": "Takes notes, creates goals, and interact with fans!",
           "bullets": [
             "Take notes during your stream",
-            "Let your fans sign your journals",
+            "Let your fans sign your journals by following your stream",
             "Set Goals",
-            "Create To-Do Lists",
+            "Create Tasks",
             "Make Reminders"
           ],
           "bannerImage": "./images/app-icon.jpg"

@@ -433,7 +433,7 @@
 
     .journal-card {
       border: 2px solid var(--sl-color-neutral-300);
-      border-radius: 12px;
+      border-radius: 24px;
       padding: 1.5rem;
       text-align: center;
       cursor: pointer;
@@ -566,7 +566,7 @@
     }
 
     .journal-title {
-      font-size: 2rem;
+      font-size: 3rem;
       margin: 0.5rem 0;
       color: var(--sl-color-primary-500);
       font-weight: 600;
@@ -687,16 +687,11 @@
     }
 
     .toolbar-btn {
-      --sl-color-neutral-0: transparent;
       border-radius: 4px;
     }
 
-    .toolbar-btn:hover {
-      background: var(--sl-color-neutral-100);
-    }
-
-    /* Todo Item Styles */
-    .todo-item {
+    /* task Item Styles */
+    .task-item {
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -707,24 +702,24 @@
       position: relative;
     }
 
-    .todo-item.completed {
+    .task-item.completed {
       background: var(--sl-color-neutral-50);
     }
 
-    .todo-item.completed .todo-text {
+    .task-item.completed .task-text {
       text-decoration: line-through;
       color: var(--sl-color-neutral-500);
     }
 
-    .todo-edit-btn {
+    .task-edit-btn {
       position: absolute;
-      top: 0.25rem;
-      right: 0.25rem;
+      top: 0.5rem;
+      right: 3.5rem;
       opacity: 0;
       transition: opacity 0.2s ease;
     }
 
-    .todo-item:hover .todo-edit-btn {
+    .task-item:hover .task-edit-btn {
       opacity: 1;
     }
 
@@ -752,7 +747,7 @@
     .reminder-edit-btn {
       position: absolute;
       top: 0.5rem;
-      right: 0.5rem;
+      right: 3.5rem;
       opacity: 0;
       transition: opacity 0.2s ease;
     }
@@ -770,7 +765,7 @@
       display: none;
     }
 
-    #confirmTodo, #confirmReminder {
+    #confirmtask, #confirmReminder {
       margin-left: 0.5rem;  
     }
     </style>
@@ -794,7 +789,7 @@
         <div class="wizard-step active" id="step1">
           <div class="step-header">
             <h1 class="step-title">Your Stream Notes</h1>
-            <p class="step-subtitle">Take notes during your stream. Set your own goals, reminders, and to-do lists.</p>
+            <p class="step-subtitle">Take notes during your stream. Set your own goals, reminders, and tasks!</p>
           </div>
           
           <div class="journal-grid">
@@ -831,14 +826,14 @@
           
           <div class="journal-content">
             <div class="journal-entry-toolbar">
-                <sl-button variant="text" size="small" class="toolbar-btn" data-type="text" pill>
-                    <sl-icon slot="suffix" name="pencil"></sl-icon>Create Note
+                <sl-button variant="neutral" size="small" class="toolbar-btn" data-type="text" pill>
+                    <sl-icon slot="suffix" name="pencil"></sl-icon>Add Note
                 </sl-button>
-                <sl-button variant="text" size="small" class="toolbar-btn" data-type="todo" pill>
-                    <sl-icon slot="suffix" name="check-square"></sl-icon>Create Todo
+                <sl-button variant="neutral" size="small" class="toolbar-btn" data-type="task" pill>
+                    <sl-icon slot="suffix" name="check-square"></sl-icon>Add Task
                 </sl-button>
-                <sl-button variant="text" size="small" class="toolbar-btn" data-type="reminder" pill>
-                    <sl-icon slot="suffix" name="clock-history"></sl-icon>Create Reminder
+                <sl-button variant="neutral" size="small" class="toolbar-btn" data-type="reminder" pill>
+                    <sl-icon slot="suffix" name="clock-history"></sl-icon>Add Reminder
                 </sl-button>
             </div>
             <div id="journalEntries">
@@ -914,7 +909,7 @@
     <div id="editJournalModal" class="scene-modal">
       <div class="scene-modal-content" style="max-width: 500px;">
         <div class="scene-modal-header">
-          <h2 class="scene-modal-title">Edit Journal Title:</h2>
+          <h2 class="scene-modal-title">Edit Note Title:</h2>
         </div>
         
         <div style="margin: 2rem 0;">
@@ -936,26 +931,26 @@
             Cancel
           </sl-button>
           <sl-button id="confirmEditJournal" variant="success" size="medium">
-            <sl-icon slot="prefix" name="pencil"></sl-icon>Update Journal
+            <sl-icon slot="prefix" name="pencil"></sl-icon>Update Note
           </sl-button>
         </div>
       </div>
     </div>
     
-    <!-- Todo Dialog -->
-    <sl-dialog id="todoDialog" label="Add Todo Item">
+    <!-- task Dialog -->
+    <sl-dialog id="taskDialog" label="Add task Item">
       <div style="margin-bottom: 1rem;">
         <sl-input 
-          id="todoInput" 
-          placeholder="Enter your todo item..."
+          id="taskInput" 
+          placeholder="Enter your task item..."
           style="width: 100%;"
           maxlength="200">
         </sl-input>
       </div>
       
       <div slot="footer">
-        <sl-button variant="neutral" size="medium" id="cancelTodo">Cancel</sl-button>
-        <sl-button variant="primary" size="medium" id="confirmTodo">Add Todo</sl-button>
+        <sl-button variant="neutral" size="medium" id="canceltask">Cancel</sl-button>
+        <sl-button variant="primary" size="medium" id="confirmtask">Add task</sl-button>
       </div>
     </sl-dialog>
     

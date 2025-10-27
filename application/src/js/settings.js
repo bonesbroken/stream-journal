@@ -24,51 +24,10 @@ let streamlabs, streamlabsOBS;
 let canAddSource = false;
 let existingSource;
 
-let defaultJournal = {
-    id: crypto.randomUUID(),
-    name: 'My Stream Journal',
-    creationDate: Date.now(),
-    entries: [
-        {
-            id: crypto.randomUUID(),
-            contentType: 'text',
-            content: 'First journal entry!',
-            createdAt: Date.now()
-        },
-        {
-            id: crypto.randomUUID(),
-            contentType: 'todo',
-            content: {
-                description: 'Kill the Ender Dragon',
-                completed: false
-            },
-            createdAt: Date.now()
-        },
-        {
-            id: crypto.randomUUID(),
-            contentType: 'todo',
-            content: {
-                description: 'Get 10 Kills',
-                completed: false
-            },
-            createdAt: Date.now()
-        },
-        {
-            id: crypto.randomUUID(),
-            contentType: 'reminder',
-            content: {
-                title: 'Get a bucket of milk',
-                dueDate: Date.now() + 3600000, // 1 hour from now
-                completed: false
-            },
-            createdAt: Date.now()
-        },
-    ]
-}
 let username = "";
 let twitchImage = "";
 
-let journalEntries = {entries: [defaultJournal]};
+let journalEntries = {};
 
 // Scene selection state
 let availableScenes = [];
@@ -228,17 +187,17 @@ function collectJournalData() {
                 }
             });
             
-            // Collect todo items
-            entryElement.find('.todo-item[data-contentType="todo"]').each(function() {
-                const todoItem = $(this);
-                const text = todoItem.attr('data-todo-text') || todoItem.find('.todo-text').text();
-                const completed = todoItem.attr('data-completed') === 'true';
-                const createdAt = parseInt(todoItem.attr('data-createdAt')) || Date.now();
+            // Collect task items
+            entryElement.find('.task-item[data-contentType="task"]').each(function() {
+                const taskItem = $(this);
+                const text = taskItem.attr('data-task-text') || taskItem.find('.task-text').text();
+                const completed = taskItem.attr('data-completed') === 'true';
+                const createdAt = parseInt(taskItem.attr('data-createdAt')) || Date.now();
                 
                 if (text && text.trim()) {
                     collectedEntries.push({
                         id: crypto.randomUUID(),
-                        contentType: 'todo',
+                        contentType: 'task',
                         content: {
                             description: text.trim(),
                             completed: completed
@@ -330,7 +289,7 @@ function populateJournalGrid() {
         
         const journalCard = $(`
             <div class="journal-card existing" id="journal-${journal.id}" data-journal-id="${journal.id}">
-                <sl-tooltip content="Delete Journal">
+                <sl-tooltip content="Delete Note">
                     <sl-button class="journal-delete-btn" variant="danger" size="small" outline data-journal-id="${journal.id}" pill>
                         <sl-icon name="trash"></sl-icon>
                     </sl-button>
@@ -469,12 +428,12 @@ function populateJournalEntries(entries) {
         const entryId = crypto.randomUUID();
         journalEntriesContainer.append(`
             <div class="journal-entry" data-entry-id="${entryId}">
-                <sl-tooltip content="Delete entry">
-                    <sl-button variant="text" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)">
-                        <sl-icon name="trash"></sl-icon>
-                    </sl-button>
-                </sl-tooltip>
                 <div class="journal-entry-content">
+                    <sl-tooltip content="Delete entry">
+                        <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                            <sl-icon name="trash"></sl-icon>
+                        </sl-button>
+                    </sl-tooltip>
                     <sl-textarea 
                         data-contentType="text"
                         data-createdAt="${currentTime}"
@@ -522,26 +481,32 @@ function populateJournalEntries(entries) {
                     </sl-textarea>
                 `;
                 break;
-            case 'todo':
+            case 'task':
                 const isCompleted = entry.content.completed || false;
                 const completedAttr = isCompleted ? 'checked' : '';
-                const todoText = entry.content.description || entry.content.title || '';
+                const taskText = entry.content.description || entry.content.title || '';
                 contentHtml = `
-                    <div class="todo-item" 
-                         data-contentType="todo" 
+                    <div class="task-item" 
+                         data-contentType="task" 
                          data-createdAt="${entry.createdAt || Date.now()}"
                          data-completed="${isCompleted}"
-                         data-todo-text="${todoText}">
+                         data-task-text="${taskText}">
                          
                         <!-- Edit Button -->
-                        <sl-tooltip content="Edit todo">
-                            <sl-button variant="text" size="small" class="todo-edit-btn" onclick="editTodo(this)">
+                        <sl-tooltip content="Edit task">
+                            <sl-button variant="neutral" size="small" class="task-edit-btn" onclick="edittask(this)" pill>
                                 <sl-icon name="pencil"></sl-icon>
                             </sl-button>
                         </sl-tooltip>
+
+                        <sl-tooltip content="Delete entry">
+                            <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                                <sl-icon name="trash"></sl-icon>
+                            </sl-button>
+                        </sl-tooltip>
                         
-                        <sl-checkbox class="todo-checkbox" ${completedAttr}></sl-checkbox>
-                        <span class="todo-text" ${isCompleted ? 'style="text-decoration: line-through;"' : ''}>${todoText}</span>
+                        <sl-checkbox class="task-checkbox" ${completedAttr}></sl-checkbox>
+                        <span class="task-text" ${isCompleted ? 'style="text-decoration: line-through;"' : ''}>${taskText}</span>
                     </div>
                 `;
                 break;
@@ -557,8 +522,14 @@ function populateJournalEntries(entries) {
                         
                         <!-- Edit Button -->
                         <sl-tooltip content="Edit reminder">
-                            <sl-button variant="text" size="small" class="reminder-edit-btn" onclick="editReminder(this)">
+                            <sl-button variant="neutral" size="small" class="reminder-edit-btn" onclick="editReminder(this)" pill>
                                 <sl-icon name="pencil"></sl-icon>
+                            </sl-button>
+                        </sl-tooltip>
+
+                        <sl-tooltip content="Delete entry">
+                            <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                                <sl-icon name="trash"></sl-icon>
                             </sl-button>
                         </sl-tooltip>
                         
@@ -574,22 +545,23 @@ function populateJournalEntries(entries) {
                 break;
             default:
                 contentHtml = `
+                    <sl-tooltip content="Delete entry">
+                        <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                            <sl-icon name="trash"></sl-icon>
+                        </sl-button>
+                    </sl-tooltip>
                     <sl-textarea 
                         data-contentType="text"
                         data-createdAt="${entry.createdAt || Date.now()}"
                         value="${JSON.stringify(entry.content)}"
                         rows="3"
-                        style="width: 100%; margin-bottom: 0.5rem;"></sl-textarea>
+                        style="width: 100%; margin-bottom: 0.5rem;">
+                    </sl-textarea>
                 `;
         }
         
         const entryHtml = `
             <div class="journal-entry" data-entry-id="${entry.id || crypto.randomUUID()}">
-                <sl-tooltip content="Delete entry">
-                    <sl-button variant="text" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)">
-                        <sl-icon name="trash"></sl-icon>
-                    </sl-button>
-                </sl-tooltip>
                 <div class="journal-entry-content">
                     ${contentHtml}
                 </div>
@@ -601,7 +573,7 @@ function populateJournalEntries(entries) {
 }
 
 function deleteJournal(journalId) {
-    if (confirm('Are you sure you want to delete this journal? This action cannot be undone.')) {
+    if (confirm('Are you sure you want to delete this note? This action cannot be undone.')) {
         // Remove journal from entries
         journalEntries.entries = journalEntries.entries.filter(j => j.id !== journalId);
         
@@ -619,8 +591,8 @@ function deleteJournal(journalId) {
         // Refresh the grid
         populateJournalGrid();
         
-        console.log('Deleted journal:', journalId);
-        showAlert('#generalAlert', 'Journal Deleted', 'Journal has been deleted successfully.', 'success');
+        console.log('Deleted note:', journalId);
+        //showAlert('#generalAlert', 'Note Deleted', 'Note has been deleted successfully.', 'success');
     }
 }
 
@@ -823,19 +795,19 @@ $(document).ready(() => {
         addTextEntryToContainer(journalEntriesContainer);
     });
     
-    $(document).on('click', '.journal-entry-toolbar .toolbar-btn[data-type="todo"]', function() {
+    $(document).on('click', '.journal-entry-toolbar .toolbar-btn[data-type="task"]', function() {
         // Store reference to the journal entries container for later use
         window.currentJournalEntriesContainer = $('#journalEntries');
         
-        // Clear and show the todo dialog
-        $('#todoInput').val('');
+        // Clear and show the task dialog
+        $('#taskInput').val('');
         
         // Ensure dialog is in "add" mode
-        editingTodoItem = null;
-        $('#todoDialog')[0].label = 'Add Todo Item';
-        $('#confirmTodo').text('Add Todo');
+        editingtaskItem = null;
+        $('#taskDialog')[0].label = 'Add task Item';
+        $('#confirmtask').text('Add task');
         
-        document.getElementById('todoDialog').show();
+        document.getElementById('taskDialog').show();
     });
     
     $(document).on('click', '.journal-entry-toolbar .toolbar-btn[data-type="reminder"]', function() {
@@ -860,26 +832,26 @@ $(document).ready(() => {
         document.getElementById('reminderDialog').show();
     });
     
-    // Todo checkbox handler
-    $(document).on('sl-change', '.todo-checkbox', function() {
-        const todoItem = $(this).closest('.todo-item');
+    // task checkbox handler
+    $(document).on('sl-change', '.task-checkbox', function() {
+        const taskItem = $(this).closest('.task-item');
         const isCompleted = $(this).prop('checked');
-        console.log('Todo item completed status changed:', isCompleted);
-        todoItem.toggleClass('completed', isCompleted);
-        todoItem.attr('data-completed', isCompleted ? 'true' : 'false');
+        console.log('task item completed status changed:', isCompleted);
+        taskItem.toggleClass('completed', isCompleted);
+        taskItem.attr('data-completed', isCompleted ? 'true' : 'false');
     });
     
     // Dialog event handlers
-    $('#cancelTodo').on('click', function() {
+    $('#canceltask').on('click', function() {
         // Reset editing state
-        editingTodoItem = null;
-        $('#todoDialog')[0].label = 'Add Todo Item';
-        $('#confirmTodo').text('Add Todo');
-        document.getElementById('todoDialog').hide();
+        editingtaskItem = null;
+        $('#taskDialog')[0].label = 'Add task Item';
+        $('#confirmtask').text('Add task');
+        document.getElementById('taskDialog').hide();
     });
     
-    $('#confirmTodo').on('click', function() {
-        confirmAddTodo();
+    $('#confirmtask').on('click', function() {
+        confirmAddtask();
     });
     
     $('#cancelReminder').on('click', function() {
@@ -895,9 +867,9 @@ $(document).ready(() => {
     });
     
     // Handle Enter key in dialog inputs
-    $('#todoInput').on('keypress', function(e) {
+    $('#taskInput').on('keypress', function(e) {
         if (e.which === 13) {
-            confirmAddTodo();
+            confirmAddtask();
         }
     });
     
@@ -966,8 +938,6 @@ function confirmCreateJournal() {
     if (!journalName) {
         const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
         journalName = `${currentDay} Stream Notes`;
-        showAlert('#generalAlert', 'Invalid Name', 'Please enter a valid journal name.', 'warning');
-        return;
     }
     
     // Check if journal name already exists
@@ -1001,29 +971,13 @@ function confirmCreateJournal() {
     //showAlert('#generalAlert', 'Journal Created', `"${journalName}" has been created successfully!`, 'success');
 }
 
-// Toolbar entry creation functions
-function addTextEntry(journalEntryElement) {
-    const currentTime = Date.now();
-    const textAreaHtml = `
-        <sl-textarea 
-            data-contentType="text"
-            data-createdAt="${currentTime}"
-            placeholder="Write your note..."
-            rows="3"
-            style="width: 100%;">
-        </sl-textarea>
-    `;
-    
-    journalEntryElement.find('.journal-entry-content').append(textAreaHtml);
-}
-
 function addTextEntryToContainer(container) {
     const currentTime = Date.now();
     const entryId = crypto.randomUUID();
     const entryHtml = `
         <div class="journal-entry" data-entry-id="${entryId}">
             <sl-tooltip content="Delete entry">
-                <sl-button variant="text" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)">
+                <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
                     <sl-icon name="trash"></sl-icon>
                 </sl-button>
             </sl-tooltip>
@@ -1050,13 +1004,13 @@ function addTextEntryToContainer(container) {
     }, 50);
 }
 
-function addTodoEntry(journalEntryElement) {
+function addtaskEntry(journalEntryElement) {
     // Store reference to the journal entry element for later use
     window.currentJournalEntry = journalEntryElement;
     
-    // Clear and show the todo dialog
-    $('#todoInput').val('');
-    document.getElementById('todoDialog').show();
+    // Clear and show the task dialog
+    $('#taskInput').val('');
+    document.getElementById('taskDialog').show();
 }
 
 function addReminderEntry(journalEntryElement) {
@@ -1077,56 +1031,57 @@ function addReminderEntry(journalEntryElement) {
 }
 
 // Dialog confirmation functions
-function confirmAddTodo() {
-    const todoText = $('#todoInput').val().trim();
-    if (!todoText) {
-        showAlert('#generalAlert', 'Invalid Input', 'Please enter a todo item.', 'warning');
+function confirmAddtask() {
+    const taskText = $('#taskInput').val().trim();
+    if (!taskText) {
+        showAlert('#generalAlert', 'Invalid Input', 'Please enter a task item.', 'warning');
         return;
     }
     
-    // Check if we're editing an existing todo
-    if (editingTodoItem) {
-        // Update existing todo
-        editingTodoItem.attr('data-todo-text', todoText);
-        editingTodoItem.find('.todo-text').text(todoText);
+    // Check if we're editing an existing task
+    if (editingtaskItem) {
+        // Update existing task
+        editingtaskItem.attr('data-task-text', taskText);
+        editingtaskItem.find('.task-text').text(taskText);
         
         // Clear editing state
-        editingTodoItem = null;
+        editingtaskItem = null;
         
         // Reset dialog title and button text
-        $('#todoDialog')[0].label = 'Add Todo Item';
-        $('#confirmTodo').text('Add Todo');
+        $('#taskDialog')[0].label = 'Add task Item';
+        $('#confirmtask').text('Add task');
         
         // Trigger auto-save
         hasUnsavedChanges = true;
         debouncedSave();
     } else {
-        // Create new todo
+        // Create new task
         const currentTime = Date.now();
         const entryId = crypto.randomUUID();
         const entryHtml = `
             <div class="journal-entry" data-entry-id="${entryId}">
-                <sl-tooltip content="Delete entry">
-                    <sl-button variant="text" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)">
-                        <sl-icon name="trash"></sl-icon>
-                    </sl-button>
-                </sl-tooltip>
                 <div class="journal-entry-content">
-                    <div class="todo-item" 
-                         data-contentType="todo" 
+                    <div class="task-item" 
+                         data-contentType="task" 
                          data-createdAt="${currentTime}"
                          data-completed="false"
-                         data-todo-text="${todoText}">
+                         data-task-text="${taskText}">
                          
                         <!-- Edit Button -->
-                        <sl-tooltip content="Edit todo">
-                            <sl-button variant="text" size="small" class="todo-edit-btn" onclick="editTodo(this)">
+                        <sl-tooltip content="Edit task">
+                            <sl-button variant="neutral" size="small" class="task-edit-btn" onclick="edittask(this)" pill>
                                 <sl-icon name="pencil"></sl-icon>
                             </sl-button>
                         </sl-tooltip>
+
+                        <sl-tooltip content="Delete entry">
+                            <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                                <sl-icon name="trash"></sl-icon>
+                            </sl-button>
+                        </sl-tooltip>
                         
-                        <sl-checkbox class="todo-checkbox"></sl-checkbox>
-                        <span class="todo-text">${todoText}</span>
+                        <sl-checkbox class="task-checkbox"></sl-checkbox>
+                        <span class="task-text">${taskText}</span>
                     </div>
                 </div>
             </div>
@@ -1135,7 +1090,7 @@ function confirmAddTodo() {
         window.currentJournalEntriesContainer.append(entryHtml);
     }
     
-    document.getElementById('todoDialog').hide();
+    document.getElementById('taskDialog').hide();
 }
 
 function confirmAddReminder() {
@@ -1192,11 +1147,6 @@ function confirmAddReminder() {
         const entryId = crypto.randomUUID();
         const entryHtml = `
             <div class="journal-entry" data-entry-id="${entryId}">
-                <sl-tooltip content="Delete entry">
-                    <sl-button variant="text" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)">
-                        <sl-icon name="trash"></sl-icon>
-                    </sl-button>
-                </sl-tooltip>
                 <div class="journal-entry-content">
                     <div class="reminder-item" 
                          data-contentType="reminder" 
@@ -1206,8 +1156,14 @@ function confirmAddReminder() {
                         
                         <!-- Edit Button -->
                         <sl-tooltip content="Edit reminder">
-                            <sl-button variant="text" size="small" class="reminder-edit-btn" onclick="editReminder(this)">
+                            <sl-button variant="neutral" size="small" class="reminder-edit-btn" onclick="editReminder(this)" pill>
                                 <sl-icon name="pencil"></sl-icon>
+                            </sl-button>
+                        </sl-tooltip>
+
+                        <sl-tooltip content="Delete reminder">
+                            <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                                <sl-icon name="trash"></sl-icon>
                             </sl-button>
                         </sl-tooltip>
                         
@@ -1303,9 +1259,9 @@ $(document).ready(function() {
         debouncedSave();
     });
     
-    // Trigger auto-save on todo checkbox changes
-    $(document).on('click', '.todo-checkbox', function() {
-        console.log('Todo checkbox changed, triggering auto-save');
+    // Trigger auto-save on task checkbox changes
+    $(document).on('click', '.task-checkbox', function() {
+        console.log('task checkbox changed, triggering auto-save');
         hasUnsavedChanges = true;
         debouncedSave();
     });
@@ -1321,8 +1277,8 @@ $(document).ready(function() {
 // Global variable to track if we're editing an existing reminder
 let editingReminderItem = null;
 
-// Global variable to track if we're editing an existing todo
-let editingTodoItem = null;
+// Global variable to track if we're editing an existing task
+let editingtaskItem = null;
 
 // Edit Reminder Function
 window.editReminder = function(button) {
@@ -1348,23 +1304,23 @@ window.editReminder = function(button) {
     $('#reminderDialog')[0].show();
 };
 
-// Edit Todo Function
-window.editTodo = function(button) {
-    const todoItem = $(button).closest('.todo-item');
-    editingTodoItem = todoItem;
+// Edit task Function
+window.edittask = function(button) {
+    const taskItem = $(button).closest('.task-item');
+    editingtaskItem = taskItem;
     
-    // Get current todo text
-    const currentText = todoItem.attr('data-todo-text') || todoItem.find('.todo-text').text();
+    // Get current task text
+    const currentText = taskItem.attr('data-task-text') || taskItem.find('.task-text').text();
     
     // Populate the dialog with current value
-    $('#todoInput')[0].value = currentText;
+    $('#taskInput')[0].value = currentText;
     
     // Change dialog title and button text to indicate editing
-    $('#todoDialog')[0].label = 'Edit Todo Item';
-    $('#confirmTodo').text('Save Todo');
+    $('#taskDialog')[0].label = 'Edit task Item';
+    $('#confirmtask').text('Save task');
     
     // Show the dialog
-    $('#todoDialog')[0].show();
+    $('#taskDialog')[0].show();
 };
 
 // Delete Journal Entry Function
