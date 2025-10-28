@@ -429,8 +429,8 @@ function populateJournalEntries(entries) {
         journalEntriesContainer.append(`
             <div class="journal-entry" data-entry-id="${entryId}">
                 <div class="journal-entry-content">
-                    <sl-tooltip content="Delete entry">
-                        <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                    <sl-tooltip content="Delete note">
+                        <sl-button variant="danger" size="small" class="journal-entry-textarea-delete-btn" onclick="deleteJournalEntry(this)" pill>
                             <sl-icon name="trash"></sl-icon>
                         </sl-button>
                     </sl-tooltip>
@@ -472,6 +472,11 @@ function populateJournalEntries(entries) {
         switch (entry.contentType) {
             case 'text':
                 contentHtml = `
+                    <sl-tooltip content="Delete note">
+                        <sl-button variant="danger" size="small" class="journal-entry-textarea-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                            <sl-icon name="trash"></sl-icon>
+                        </sl-button>
+                    </sl-tooltip>
                     <sl-textarea 
                         data-contentType="text"
                         data-createdAt="${entry.createdAt || Date.now()}"
@@ -499,7 +504,7 @@ function populateJournalEntries(entries) {
                             </sl-button>
                         </sl-tooltip>
 
-                        <sl-tooltip content="Delete entry">
+                        <sl-tooltip content="Delete task">
                             <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
                                 <sl-icon name="trash"></sl-icon>
                             </sl-button>
@@ -527,7 +532,7 @@ function populateJournalEntries(entries) {
                             </sl-button>
                         </sl-tooltip>
 
-                        <sl-tooltip content="Delete entry">
+                        <sl-tooltip content="Delete reminder">
                             <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
                                 <sl-icon name="trash"></sl-icon>
                             </sl-button>
@@ -545,8 +550,8 @@ function populateJournalEntries(entries) {
                 break;
             default:
                 contentHtml = `
-                    <sl-tooltip content="Delete entry">
-                        <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                    <sl-tooltip content="Delete note">
+                        <sl-button variant="danger" size="small" class="journal-entry-textarea-delete-btn" onclick="deleteJournalEntry(this)" pill>
                             <sl-icon name="trash"></sl-icon>
                         </sl-button>
                     </sl-tooltip>
@@ -976,8 +981,8 @@ function addTextEntryToContainer(container) {
     const entryId = crypto.randomUUID();
     const entryHtml = `
         <div class="journal-entry" data-entry-id="${entryId}">
-            <sl-tooltip content="Delete entry">
-                <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+            <sl-tooltip content="Delete note">
+                <sl-button variant="danger" size="small" class="journal-entry-textarea-delete-btn" onclick="deleteJournalEntry(this)" pill>
                     <sl-icon name="trash"></sl-icon>
                 </sl-button>
             </sl-tooltip>
@@ -1074,7 +1079,7 @@ function confirmAddtask() {
                             </sl-button>
                         </sl-tooltip>
 
-                        <sl-tooltip content="Delete entry">
+                        <sl-tooltip content="Delete task">
                             <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
                                 <sl-icon name="trash"></sl-icon>
                             </sl-button>

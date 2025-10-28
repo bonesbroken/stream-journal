@@ -647,6 +647,23 @@
       transform: scale(1.1);
     }
 
+    .journal-entry-textarea-delete-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 1.5rem;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 10;
+    }
+
+    .journal-entry:hover .journal-entry-textarea-delete-btn {
+      opacity: 1;
+    }
+
+    .journal-entry-textarea-delete-btn:hover {
+      transform: scale(1.1);
+    }
+
     .journal-entry-header {
       display: flex;
       justify-content: space-between;
@@ -677,17 +694,27 @@
     /* Journal Entry Toolbar Styles */
     .journal-entry-toolbar {
         display: flex;
+        flex-direction: row-reverse;
         gap: 0.5rem;
         padding: 0 1rem;
         /* border-bottom: 1px solid var(--sl-color-neutral-200); */
         background: var(--sl-color-neutral-25);
         border-radius: 8px 8px 0 0;
         /* margin: -1rem -1rem 1rem -1rem; */
-        margin-bottom: 0.5rem;
+        margin-bottom: 1rem;
     }
 
     .toolbar-btn {
       border-radius: 4px;
+
+      &::part(base) {
+        background: var(--sl-color-primary-100);
+        border-color: var(--sl-color-primary-100);
+      }
+      &::part(base):hover {
+        background: var(--sl-color-primary-600);
+        border-color: var(--sl-color-primary-600);
+      }
     }
 
     /* task Item Styles */
