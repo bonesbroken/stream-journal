@@ -1,31 +1,229 @@
 <!doctype html>
-<html>
+<html class="sl-theme-dark" style="height: 100%;">
   <head>
     <meta charset="utf-8"/>
+    <title>Stream Notes</title>
     <script src="https://cdn.streamlabs.com/slobs-platform/lib/streamlabs-platform.min.js"></script>
     <style>
     * {
-        box-sizing: inherit;
-      }
+      font-family: var(--sl-font-sans);
+      box-sizing: inherit;
+    }
 
     html, body {
       padding: 0;
       margin: 0;
-      overflow: hidden; 
-      width: 100vw;
-      height: 100vh;
+      box-sizing: border-box;
+      font-size: 1rem;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
-    #canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
+    .container {
+      padding: 1rem 1rem 2rem 1rem;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      background: var(--sl-color-neutral-50);
+      border-radius: 2rem;
+      max-width: 95vw;
+      max-height: 90vh;
+      width: 1200px;
+      min-height: 60vh;
+    }
+
+    /* Responsive Container */
+    @media (max-width: 1400px) {
+      .container {
+        width: 85vw;
+        max-width: 600px;
+      }
+    }
+
+    @media (max-width: 1200px) {
+      .container {
+        width: 85vw;
+        max-width: 600px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .container {
+        width: 85vw;
+        max-width: 600px;
+        border-radius: 1.5rem;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        width: 85vw;
+        border-radius: 1rem;
+        min-height: 50vh;
+      }
+    }
+
+    .journal-header {
+      margin-bottom: 1rem;
+      color: var(--sl-color-neutral-700);
+      text-align: center;
+    }
+
+    .journal-title {
+      font-size: 2rem;
+      margin: 0.5rem 0;
+      color: var(--sl-color-primary-500);
+      font-weight: 600;
+    }
+
+    /* Responsive Typography */
+    @media (max-width: 900px) {
+      .journal-title {
+        font-size: 1.75rem;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .journal-title {
+        font-size: 1.5rem;
+        margin: 0.25rem 0;
+      }
+    }
+
+    .journal-content {
+      flex: 1;
+      max-width: 800px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Responsive Content */
+    @media (max-width: 900px) {
+      .journal-content {
+        max-width: none;
+      }
+    }
+
+    #noteEntries {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .journal-entry {
+      background: var(--sl-color-neutral-0);
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Responsive Journal Entries */
+    @media (max-width: 600px) {
+      .journal-entry {
+        padding: 0.75rem;
+        border-radius: 6px;
+        margin-bottom: 0.375rem;
+      }
+    }
+
+    .journal-entry-content {
+      color: var(--sl-color-neutral-700);
+      line-height: 1.5;
+    }
+
+    /* Text entry styles */
+    .text-content {
+      font-size: var(--sl-font-size-medium);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    /* Task Item Styles */
+    .task-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      border-radius: 4px;
+      background: var(--sl-color-neutral-0);
+    }
+
+    .task-item.completed {
+      background: var(--sl-color-neutral-50);
+    }
+
+    .task-item.completed .task-text {
+      text-decoration: line-through;
+      color: var(--sl-color-neutral-500);
+    }
+
+    .task-text {
+      flex: 1;
+    }
+
+    .task-checkbox {
+      pointer-events: none; /* Read-only */
+    }
+
+    /* Reminder Item Styles */
+    .reminder-item {
+      padding: 1rem;
+      border: 1px solid var(--sl-color-primary-300);
+      border-radius: 4px;
+      background: var(--sl-color-primary-50);
+    }
+
+    .reminder-item.due {
+      border-color: var(--sl-color-warning-500);
+      background: var(--sl-color-warning-50);
+
+      & > div {
+        color: var(--sl-color-warning-700);
+      }
+    }
+
+    .reminder-due-date {
+      font-size: var(--sl-font-size-small);
+      color: var(--sl-color-primary-700);
+      margin-top: 0.5rem;
+    }
+
+    .reminder-title {
+      font-weight: 600;
+      color: var(--sl-color-primary-800);
+      margin-bottom: 0.5rem;
+    }
+
+    .no-journal {
+      text-align: center;
+      color: var(--sl-color-neutral-500);
+      font-style: italic;
+      margin-top: 2rem;
+    }
+
+    .loading {
+      text-align: center;
+      color: var(--sl-color-neutral-600);
+      margin-top: 2rem;
     }
     </style>
 
     <script defer="defer" src="./index.js"></script>
   </head>
-  <body><canvas id="canvas"></canvas></body>
+  <body>
+    <div class="container" style="display: none;">
+      <div class="journal-header">
+        <h1 class="journal-title" id="journalTitle">Loading...</h1>
+      </div>
+      
+      <div class="journal-content">
+        <div id="noteEntries">
+          <div class="loading">Loading journal entries...</div>
+        </div>
+      </div>
+    </div>
+  </body>
 </html>

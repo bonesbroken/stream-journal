@@ -11,10 +11,9 @@
         "name": "StreamNotes",
         "id": "bb-stream-notepad",
         "about": {
-          "description": "Takes notes, creates goals, and interact with fans!",
+          "description": "A notepad for your stream.",
           "bullets": [
             "Take notes during your stream",
-            "Let your fans sign your journals by following your stream",
             "Set Goals",
             "Create Tasks",
             "Make Reminders"

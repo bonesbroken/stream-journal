@@ -1,5 +1,4 @@
 import $ from "jquery";
-import { defaultWebcamFrameSettings } from './utils.js';
 import '@shoelace-style/shoelace/dist/themes/dark.css';
 import '@shoelace-style/shoelace/dist/components/button/button.js';
 import '@shoelace-style/shoelace/dist/components/icon/icon.js';
@@ -27,7 +26,42 @@ let existingSource;
 let username = "";
 let twitchImage = "";
 
-let journalEntries = {};
+const defaultEntries = { entries: [
+    {
+        "id": "28b88b01-3e06-41e2-8bfe-5f2beea60c56",
+        "name": "Example Note",
+        "creationDate": 1761883040877,
+        "entries": [
+            {
+                "id": "4d7e7a9f-5d73-461e-8ab0-b28c7513f50d",
+                "contentType": "text",
+                "content": "Here's an example of a note! Maybe you need to figure out how to beat the ender dragon or a learn a crafting recipe.",
+                "createdAt": 1761883042363
+            },
+            {
+                "id": "372f7871-a3fe-4cf6-84f0-354d1cf4504c",
+                "contentType": "task",
+                "content": {
+                    "description": "Get Wood",
+                    "completed": true
+                },
+                "createdAt": 1761883045582
+            },
+            {
+                "id": "95c22a5c-2eb2-4c4f-9142-63dcea7c23ad",
+                "contentType": "task",
+                "content": {
+                    "description": "Slay the Dragon",
+                    "completed": false
+                },
+                "createdAt": 1761883131876
+            }
+        ]
+    }
+] };
+let noteEntries = { entries: [] };
+
+
 
 // Scene selection state
 let availableScenes = [];
@@ -39,11 +73,67 @@ let currentPage = 0;
 const itemsPerPage = 5; // 5 journals + 1 "Create New" = 6 total
 
 // Current journal state
-let currentJournalId = null;
+let currentNoteId = null;
 
 // Auto-save functionality
 let autoSaveTimeout = null;
 let hasUnsavedChanges = false;
+
+// Reminder due date checking
+let reminderCheckInterval = null;
+
+// Function to check and update reminder due status
+function checkReminderDueDates() {
+    // Only check if we're in journal view with reminders
+    if (!currentNoteId) return;
+    
+    const currentTime = new Date();
+    
+    // Find all reminder items on the page
+    $('.reminder-item[data-contentType="reminder"]').each(function() {
+        const reminderItem = $(this);
+        const dueDateTime = parseInt(reminderItem.attr('data-dueDate'));
+        
+        if (dueDateTime) {
+            const dueDate = new Date(dueDateTime);
+            const isDue = dueDate <= currentTime;
+            
+            // Update the due class based on current time
+            if (isDue) {
+                if (!reminderItem.hasClass('due')) {
+                    reminderItem.addClass('due');
+                    console.log('Reminder became due:', reminderItem.attr('data-title'));
+                }
+            } else {
+                if (reminderItem.hasClass('due')) {
+                    reminderItem.removeClass('due');
+                    console.log('Reminder no longer due:', reminderItem.attr('data-title'));
+                }
+            }
+        }
+    });
+}
+
+// Start periodic reminder checking (every 1 minute)
+function startReminderChecking() {
+    // Clear existing interval if any
+    if (reminderCheckInterval) {
+        clearInterval(reminderCheckInterval);
+    }
+    
+    // Set up new interval - check every 60 seconds
+    reminderCheckInterval = setInterval(checkReminderDueDates, 60000);
+    console.log('Started reminder due date checking (every 1 minute)');
+}
+
+// Stop periodic reminder checking
+function stopReminderChecking() {
+    if (reminderCheckInterval) {
+        clearInterval(reminderCheckInterval);
+        reminderCheckInterval = null;
+        console.log('Stopped reminder due date checking');
+    }
+}
 
 // Debounced save function - saves after 2 seconds of no changes
 function debouncedSave() {
@@ -55,8 +145,8 @@ function debouncedSave() {
     
     autoSaveTimeout = setTimeout(() => {
         if (hasUnsavedChanges) {
-            collectJournalData();
-            saveJournalEntries();
+            collectNoteData();
+            saveNoteEntries();
             hasUnsavedChanges = false;
         }
     }, 2000); // Save after 2 seconds of inactivity
@@ -83,7 +173,7 @@ async function initApp() {
         console.log('Streamlabs initialized with data:', data);
         username = data.profiles.streamlabs.name;
         twitchImage = data.profiles.twitch.icon_url;
-        await loadJournalEntries();
+        await loadNoteEntries();
 
         streamlabsOBS = window.streamlabsOBS;
         streamlabsOBS.apiReady.then(() => {
@@ -103,75 +193,89 @@ async function initApp() {
                 // Accesses via existing source, load source settings
                 console.log('Accessed via existing source');
 
-                streamlabsOBS.v1.Sources.getAppSourceSettings(nav.sourceId).then(loadedSettings => {
+                streamlabsOBS.v1.Sources.getAppSourceSettings(nav.sourceId).then(journalId => {
                     existingSource = nav.sourceId;
-
-                    if(!loadedSettings) {
+                    if(!journalId) {
                         console.log('New source, no settings');
-   
-                        
                     } else {
-                        console.log('Source updated from stored settings', loadedSettings);
+                        console.log('loading journal entry', journalId);
+                        loadNote(journalId);
                     }
                 });  
             } else {
                 existingSource = null;
-                // Accesses via side nav, load saved settings
+                // Accesses via side nav
                 console.log('Accessed via side nav');
             }
         });
     });
 }
 
-async function loadJournalEntries() {
-    streamlabs.userSettings.get('streamJournalEntries').then(data => {
+async function loadNoteEntries() {
+    streamlabs.userSettings.get('streamNoteEntries').then(data => {
         if (!data) {
             console.log("no settings found, reverting to default")
-            return;
+            data = defaultEntries;
+            console.log('default data', data);
         }
-        if (typeof data == "object") {
-            journalEntries = structuredClone(data);
-            
-            // Populate journal entries in the UI
-            populateJournalGrid();
+        
+        // Check if data exists but entries array is empty
+        if (data && typeof data == "object" && data.entries && Array.isArray(data.entries) && data.entries.length === 0) {
+            console.log("empty entries array found, reverting to default")
+            data = defaultEntries;
         }
+        
+       for (const [key, value] of Object.entries(defaultEntries)) {
+            if(!data.hasOwnProperty(key)) {
+                console.log(`setting '${key}' missing! set to ${value}`);
+                data[key] = defaultEntries[key];
+            }
+        }
+
+        noteEntries = structuredClone(data);
+        console.log('Loaded Note Entries:', noteEntries);
+        
+        // Populate journal entries in the UI
+        populateNoteGrid();
     });
 
     return new Promise((resolve) => {
         setTimeout(() => {
-            console.log('loaded Journal Entries:', journalEntries);
+            //console.log('loaded Journal Entries:', noteEntries);
             resolve();
         }, 1000);
     });
 }
 
-async function saveJournalEntries() {
+async function saveNoteEntries() {
     try {
-        await streamlabs.userSettings.set('streamJournalEntries', journalEntries);
-        console.log('Journal entries saved successfully');
+        await streamlabs.userSettings.set('streamNoteEntries', noteEntries).then(() => {
+            streamlabs.postMessage('update', {});
+        });
+        //console.log('Note entries saved successfully');
         return true;
     } catch (error) {
-        console.error('Error saving journal entries:', error);
-        showAlert('#generalAlert', 'Save Error', 'Failed to save journal entries.', 'danger');
+        console.error('Error saving note entries:', error);
+        showAlert('#generalAlert', 'Save Error', 'Failed to save note entries.', 'danger');
         return false;
     }
 }
 
-// Collect journal data from the current journal view UI
-function collectJournalData() {
-    if (!currentJournalId) return;
+// Collect note data from the current note view UI
+function collectNoteData() {
+    if (!currentNoteId) return;
     
-    const journalIndex = journalEntries.entries.findIndex(j => j.id === currentJournalId);
-    if (journalIndex === -1) return;
+    const noteIndex = noteEntries.entries.findIndex(j => j.id === currentNoteId);
+    if (noteIndex === -1) return;
     
     const collectedEntries = [];
     
     // Get all journal entries from the UI
-    $('#journalEntries .journal-entry').each(function() {
+    $('#noteEntries .note-entry').each(function() {
         const entryElement = $(this);
         
         // Skip if this is the empty journal entry with toolbar (no header)
-        if (entryElement.find('.journal-entry-header').length === 0) {
+        if (entryElement.find('.note-entry-header').length === 0) {
             
             // Collect text areas
             entryElement.find('sl-textarea[data-contentType="text"]').each(function() {
@@ -231,66 +335,56 @@ function collectJournalData() {
     });
     
     // Update the journal entries in the data structure
-    journalEntries.entries[journalIndex].entries = collectedEntries;
+    noteEntries.entries[noteIndex].entries = collectedEntries;
     
     console.log('Collected journal data:', collectedEntries);
 }
 
-function updateUI(settings, newSource) {
-    console.log('Updating UI with settings:', settings, 'New source:', newSource);
-
-    if(newSource === 'new') {
-        $('#saveAppSource').hide();
-    } else {
-        $('#saveAppSource').show();
-    }
-    
-}
-
-function populateJournalGrid() {
-    const journalGrid = $('.journal-grid');
+function populateNoteGrid() {
+    if(!noteEntries || !noteEntries.entries) return;
+    const noteGrid = $('.journal-grid');
     
     // Clear existing journal cards
-    journalGrid.find('.journal-card').remove();
+    noteGrid.find('.journal-card').remove();
     
     // Sort journals by creation date (newest first)
-    const sortedJournals = [...journalEntries.entries].sort((a, b) => b.creationDate - a.creationDate);
+    const sortedNotes = [...noteEntries.entries].sort((a, b) => b.creationDate - a.creationDate);
     
     // Only show "Create New" button on the first page (page 0)
     if (currentPage === 0) {
         const createNewCard = $(`
-            <div class="journal-card create-new" id="createNewJournal">
+            <div class="journal-card create-new" id="createNewNote">
                 <div class="journal-icon">
                     <sl-icon name="plus-circle" style="font-size: 3rem; color: var(--sl-color-primary-500);" aria-hidden="true" library="default"></sl-icon>
                 </div>
                 <h3>Create Notepad</h3>
             </div>
         `);
-        journalGrid.append(createNewCard);
+        noteGrid.append(createNewCard);
     }
     
     // Calculate pagination based on available space
-    // Page 0: 5 journals (1 slot used by "Create New" button)
-    // Other pages: 6 journals (full grid)
-    const journalsPerPage = currentPage === 0 ? 5 : 6;
+    // Page 0: 5 notes (1 slot used by "Create New" button)
+    // Other pages: 6 notes (full grid)
+    const notesPerPage = currentPage === 0 ? 5 : 6;
     const startIndex = currentPage === 0 ? 0 : 5 + ((currentPage - 1) * 6);
-    const endIndex = Math.min(startIndex + journalsPerPage, sortedJournals.length);
-    const journalsToShow = sortedJournals.slice(startIndex, endIndex);
+    const endIndex = Math.min(startIndex + notesPerPage, sortedNotes.length);
+    const notesToShow = sortedNotes.slice(startIndex, endIndex);
     
     // Calculate total pages correctly
-    const totalPages = sortedJournals.length <= 5 ? 1 : Math.ceil((sortedJournals.length - 5) / 6) + 1;
+    const totalPages = sortedNotes.length <= 5 ? 1 : Math.ceil((sortedNotes.length - 5) / 6) + 1;
     
     // Add each journal as a card
-    journalsToShow.forEach((journal, index) => {
+    notesToShow.forEach((journal, index) => {
         
         // Pick a random color from the custom palette
         const colors = ['#f9fbe1', '#ecc1c4', '#e19ead', '#bde1f0', '#90a9d4', '#6b7bad'];
         const iconColor = colors[Math.floor(Math.random() * colors.length)];
         
-        const journalCard = $(`
-            <div class="journal-card existing" id="journal-${journal.id}" data-journal-id="${journal.id}">
+        const noteCard = $(`
+            <div class="journal-card existing" id="journal-${journal.id}" data-note-id="${journal.id}"${journal.sceneItemId ? ` data-sceneitem-id="${journal.sceneItemId}"` : ''}>
                 <sl-tooltip content="Delete Note">
-                    <sl-button class="journal-delete-btn" variant="danger" size="small" outline data-journal-id="${journal.id}" pill>
+                    <sl-button class="note-delete-btn" variant="danger" size="small" outline data-note-id="${journal.id}"${journal.sceneItemId ? ` data-sceneitem-id="${journal.sceneItemId}"` : ''} pill>
                         <sl-icon name="trash"></sl-icon>
                     </sl-button>
                 </sl-tooltip>
@@ -302,31 +396,31 @@ function populateJournalGrid() {
         `);
         
         // Add click handler for the entire card to load journal (but not when clicking delete button)
-        journalCard.on('click', (e) => {
+        noteCard.on('click', (e) => {
             // Don't load journal if clicking on delete button or its tooltip
-            if ($(e.target).closest('.journal-delete-btn, sl-tooltip').length === 0) {
-                loadJournal(journal.id);
+            if ($(e.target).closest('.note-delete-btn, sl-tooltip').length === 0) {
+                loadNote(journal.id);
             }
         });
         
-        journalGrid.append(journalCard);
+        noteGrid.append(noteCard);
     });
     
     // Update pagination controls
-    updatePaginationControls(currentPage, totalPages, sortedJournals.length);
+    updatePaginationControls(currentPage, totalPages, sortedNotes.length);
     
-    console.log(`Showing journals ${startIndex + 1}-${endIndex} of ${sortedJournals.length} (Page ${currentPage + 1}/${totalPages})`);
+    //console.log(`Showing notes ${startIndex + 1}-${endIndex} of ${sortedNotes.length} (Page ${currentPage + 1}/${totalPages})`);
 }
 
 // Pagination functions
-function updatePaginationControls(currentPageNum, totalPages, totalJournals) {
+function updatePaginationControls(currentPageNum, totalPages, totalNotes) {
     let paginationHtml = '';
     
     if (totalPages > 1) {
         paginationHtml = `
             <div class="pagination-controls">
                 <div class="pagination-info">
-                    <span>Page ${currentPageNum + 1} of ${totalPages} (${totalJournals} journals)</span>
+                    <span>Page ${currentPageNum + 1} of ${totalPages} (${totalNotes} journals)</span>
                 </div>
                 <div class="pagination-buttons">
                     <sl-button size="small" variant="default" ${currentPageNum === 0 ? 'disabled' : ''} id="prevPage">
@@ -348,61 +442,48 @@ function updatePaginationControls(currentPageNum, totalPages, totalJournals) {
 }
 
 function goToNextPage() {
-    const sortedJournals = [...journalEntries.entries].sort((a, b) => b.creationDate - a.creationDate);
-    const totalPages = sortedJournals.length <= 5 ? 1 : Math.ceil((sortedJournals.length - 5) / 6) + 1;
+    const sortedNotes = [...noteEntries.entries].sort((a, b) => b.creationDate - a.creationDate);
+    const totalPages = sortedNotes.length <= 5 ? 1 : Math.ceil((sortedNotes.length - 5) / 6) + 1;
     
     if (currentPage < totalPages - 1) {
         currentPage++;
-        populateJournalGrid();
+        populateNoteGrid();
     }
 }
 
 function goToPreviousPage() {
     if (currentPage > 0) {
         currentPage--;
-        populateJournalGrid();
+        populateNoteGrid();
     }
 }
 
-// Journal management functions
-function selectJournal(journalId) {
-    // Remove selected class from all cards
-    $('.journal-card').removeClass('selected');
-    
-    // Add selected class to clicked card
-    $(`.journal-card[data-journal-id="${journalId}"]`).addClass('selected');
-    
-    console.log('Selected journal:', journalId);
-}
+function loadNote(noteId) {
+    const note = noteEntries.entries.find(j => j.id === noteId);
+    if (note) {
+        console.log('Loading note:', note);
 
-function loadJournal(journalId) {
-    const journal = journalEntries.entries.find(j => j.id === journalId);
-    if (journal) {
-        console.log('Loading journal:', journal);
-        
-        // Show the journal view
-        showJournalView(journal);
-        
-        //showAlert('#generalAlert', 'Journal Loaded', `Loaded "${journal.name}" successfully!`, 'success');
+        // Show the note view
+        showNoteView(note);
     }
 }
 
-function showJournalView(journal) {
+function showNoteView(note) {
     // Store the current journal ID
-    currentJournalId = journal.id;
-    
+    currentNoteId = note.id;
+
     // Hide the journal list step and show the journal view
     $('#step1').removeClass('active');
     $('#journalView').addClass('active');
     
     // Set journal title and formatted date
-    $('#journalTitle').text(journal.name);
+    $('#noteTitle').text(note.name);
     
     // Set journal author
     $('#journalViewAuthor').text(`By ${username}`);
     
     // Format the creation date with full details and timezone
-    const creationDate = new Date(journal.creationDate);
+    const creationDate = new Date(note.creationDate);
     const options = {
         weekday: 'long',
         year: 'numeric',
@@ -414,23 +495,26 @@ function showJournalView(journal) {
     };
     const formattedDate = creationDate.toLocaleDateString('en-US', options);
     $('#journalDate').text(formattedDate);
-    
-    // Populate journal entries
-    populateJournalEntries(journal.entries);
+
+    // Populate note entries
+    populateNoteEntries(note.entries);
+
+    // Start periodic reminder due date checking
+    startReminderChecking();
 }
 
-function populateJournalEntries(entries) {
-    const journalEntriesContainer = $('#journalEntries');
-    journalEntriesContainer.empty();
+function populateNoteEntries(entries) {
+    const noteEntriesContainer = $('#noteEntries');
+    noteEntriesContainer.empty();
     
     if (entries.length === 0) {
         const currentTime = Date.now();
         const entryId = crypto.randomUUID();
-        journalEntriesContainer.append(`
-            <div class="journal-entry" data-entry-id="${entryId}">
-                <div class="journal-entry-content">
+        noteEntriesContainer.append(`
+            <div class="note-entry" data-entry-id="${entryId}">
+                <div class="note-entry-content">
                     <sl-tooltip content="Delete note">
-                        <sl-button variant="danger" size="small" class="journal-entry-textarea-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                        <sl-button variant="danger" size="small" class="note-entry-textarea-delete-btn" onclick="deleteNoteEntry(this)" pill>
                             <sl-icon name="trash"></sl-icon>
                         </sl-button>
                     </sl-tooltip>
@@ -447,7 +531,7 @@ function populateJournalEntries(entries) {
         
         // Focus the newly created textarea
         setTimeout(() => {
-            const newTextarea = journalEntriesContainer.find(`[data-entry-id="${entryId}"] sl-textarea`)[0];
+            const newTextarea = noteEntriesContainer.find(`[data-entry-id="${entryId}"] sl-textarea`)[0];
             if (newTextarea) {
                 newTextarea.focus();
             }
@@ -473,7 +557,7 @@ function populateJournalEntries(entries) {
             case 'text':
                 contentHtml = `
                     <sl-tooltip content="Delete note">
-                        <sl-button variant="danger" size="small" class="journal-entry-textarea-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                        <sl-button variant="danger" size="small" class="note-entry-textarea-delete-btn" onclick="deleteNoteEntry(this)" pill>
                             <sl-icon name="trash"></sl-icon>
                         </sl-button>
                     </sl-tooltip>
@@ -505,7 +589,7 @@ function populateJournalEntries(entries) {
                         </sl-tooltip>
 
                         <sl-tooltip content="Delete task">
-                            <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                            <sl-button variant="danger" size="small" class="note-entry-delete-btn" onclick="deleteNoteEntry(this)" pill>
                                 <sl-icon name="trash"></sl-icon>
                             </sl-button>
                         </sl-tooltip>
@@ -518,8 +602,14 @@ function populateJournalEntries(entries) {
             case 'reminder':
                 const dueDate = new Date(entry.content.dueDate || Date.now());
                 const formattedDate = dueDate.toLocaleDateString() + ' ' + dueDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                // Check if the reminder is due
+                const currentTime = new Date();
+                const isDue = dueDate <= currentTime;
+                const dueClass = isDue ? ' due' : '';
+                
                 contentHtml = `
-                    <div class="reminder-item" 
+                    <div class="reminder-item${dueClass}" 
                          data-contentType="reminder" 
                          data-createdAt="${entry.createdAt || Date.now()}"
                          data-dueDate="${entry.content.dueDate || Date.now()}"
@@ -533,7 +623,7 @@ function populateJournalEntries(entries) {
                         </sl-tooltip>
 
                         <sl-tooltip content="Delete reminder">
-                            <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                            <sl-button variant="danger" size="small" class="note-entry-delete-btn" onclick="deleteNoteEntry(this)" pill>
                                 <sl-icon name="trash"></sl-icon>
                             </sl-button>
                         </sl-tooltip>
@@ -551,7 +641,7 @@ function populateJournalEntries(entries) {
             default:
                 contentHtml = `
                     <sl-tooltip content="Delete note">
-                        <sl-button variant="danger" size="small" class="journal-entry-textarea-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                        <sl-button variant="danger" size="small" class="note-entry-textarea-delete-btn" onclick="deleteNoteEntry(this)" pill>
                             <sl-icon name="trash"></sl-icon>
                         </sl-button>
                     </sl-tooltip>
@@ -566,52 +656,51 @@ function populateJournalEntries(entries) {
         }
         
         const entryHtml = `
-            <div class="journal-entry" data-entry-id="${entry.id || crypto.randomUUID()}">
-                <div class="journal-entry-content">
+            <div class="note-entry" data-entry-id="${entry.id || crypto.randomUUID()}">
+                <div class="note-entry-content">
                     ${contentHtml}
                 </div>
             </div>
         `;
         
-        journalEntriesContainer.append(entryHtml);
+        noteEntriesContainer.append(entryHtml);
     });
 }
 
-function deleteJournal(journalId) {
-    if (confirm('Are you sure you want to delete this note? This action cannot be undone.')) {
-        // Remove journal from entries
-        journalEntries.entries = journalEntries.entries.filter(j => j.id !== journalId);
-        
+function deleteNote(noteId, sceneItemId) {
+    if (confirm('Are you sure you want to delete this note? This also removes it from your scenes.')) {
+        noteEntries.entries = noteEntries.entries.filter(j => j.id !== noteId);
+
         // Save updated entries
-        streamlabs.userSettings.set('streamJournalEntries', journalEntries);
-        
+        streamlabs.userSettings.set('streamNoteEntries', noteEntries).then(() => {
+            // if the source is in a scene, remove it
+           // console.log(noteEntries);
+            streamlabsOBS.v1.Scenes.getScenes().then(scenes => {
+                //console.log('Current scenes:', scenes);
+                const sceneWithSource = scenes.find(scene => scene.nodes.some(node => node.id === sceneItemId));
+                if (sceneWithSource) {
+                    let saveScene = structuredClone(sceneWithSource);
+                    console.log(saveScene, sceneItemId);
+                    streamlabsOBS.v1.Scenes.removeSceneItem(sceneWithSource.id, sceneItemId);
+                }
+                
+            });
+        });
+            
         // Check if current page is now empty and adjust if needed
-        const sortedJournals = [...journalEntries.entries].sort((a, b) => b.creationDate - a.creationDate);
-        const totalPages = sortedJournals.length <= 5 ? 1 : Math.ceil((sortedJournals.length - 5) / 6) + 1;
+        const sortedNotes = [...noteEntries.entries].sort((a, b) => b.creationDate - a.creationDate);
+        const totalPages = sortedNotes.length <= 5 ? 1 : Math.ceil((sortedNotes.length - 5) / 6) + 1;
         
         if (currentPage >= totalPages && currentPage > 0) {
             currentPage = totalPages - 1;
         }
         
         // Refresh the grid
-        populateJournalGrid();
+        populateNoteGrid();
         
-        console.log('Deleted note:', journalId);
-        //showAlert('#generalAlert', 'Note Deleted', 'Note has been deleted successfully.', 'success');
+        console.log('Deleted note:', noteId);
     }
 }
-
-$("#saveAppSource").on('click', () => { 
-    if(!canAddSource) return;
-
-    if(existingSource) {
-        streamlabsOBS.v1.Sources.updateSource({id: existingSource, name: 'Stream Journal'});
-        streamlabsOBS.v1.Sources.setAppSourceSettings(existingSource, JSON.stringify(webcamSettings));
-        streamlabsOBS.v1.App.navigate('Editor');
-        existingSource = null;
-    }
-});
-
 
 $("#addAppSource").on('click', () => { 
     if(!canAddSource) return;
@@ -713,13 +802,44 @@ function selectScene(scene) {
     $('#sceneModalConfirm').addClass('visible');
 }
 
+// Get current journal data for saving to source settings
+function getCurrentNoteData() {
+    if (!currentNoteId) return null;
+    
+    const note = noteEntries.entries.find(j => j.id === currentNoteId);
+    if (!note) return null;
+    
+    // Collect the latest data from UI before returning
+    collectNoteData();
+    
+    return {
+        currentNoteId: currentNoteId,
+        noteData: note
+    };
+}
+
 async function confirmAddToScene() {
     if (!selectedSceneId) return;
+
+    // Get current note data
+    const currentNoteData = getCurrentNoteData();
+    console.log('Current note data for source settings:', currentNoteData);
     
     try {
-        const source = await streamlabsOBS.v1.Sources.createAppSource('Stream Notes', 'bb-stream-notepad');
-        await streamlabsOBS.v1.Sources.setAppSourceSettings(source.id, JSON.stringify(webcamSettings));
-        await streamlabsOBS.v1.Scenes.createSceneItem(selectedSceneId, source.id);
+        const source = await streamlabsOBS.v1.Sources.createAppSource(currentNoteData.noteData.name, 'bb-stream-notepad');
+        await streamlabsOBS.v1.Sources.setAppSourceSettings(source.id, currentNoteData.currentNoteId);
+        const sceneItem = await streamlabsOBS.v1.Scenes.createSceneItem(selectedSceneId, source.id);
+        console.log(`Added ${currentNoteData.noteData.name} to scene:`, {
+            id: sceneItem.id,
+            sourceId: sceneItem.sourceId,
+        });
+         // Update the note card in the grid view to include the source ID
+        const noteCard = $(`#journal-${currentNoteData.currentNoteId}`);
+        if (noteCard.length) {
+            noteCard.attr('data-sceneitem-id', sceneItem.id);
+            // Also update the delete button to include the source ID
+            noteCard.find('.note-delete-btn').attr('data-sceneitem-id', sceneItem.id);
+        }
         
         closeSceneSelectionModal();
         streamlabsOBS.v1.App.navigate('Editor');
@@ -747,25 +867,24 @@ $(document).ready(() => {
         }
     });
     
-    // Create New Journal modal handlers
-    $(document).on('click', '#createNewJournal', function() {
-        createNewJournal();
+    $(document).on('click', '#createNewNote', function() {
+        createNewNote();
     });
     
-    $('#cancelCreateJournal').on('click', closeCreateJournalModal);
-    $('#confirmCreateJournal').on('click', confirmCreateJournal);
+    $('#cancelCreateNote').on('click', closeCreateNoteModal);
+    $('#confirmCreateNote').on('click', confirmCreateNote);
     
     // Close create journal modal when clicking outside
-    $('#createJournalModal').on('click', (e) => {
-        if (e.target.id === 'createJournalModal') {
-            closeCreateJournalModal();
+    $('#createNoteModal').on('click', (e) => {
+        if (e.target.id === 'createNoteModal') {
+            closeCreateNoteModal();
         }
     });
     
-    // Handle Enter key in journal name input
-    $('#journalNameInput').on('keypress', (e) => {
+    // Handle Enter key in Note name input
+    $('#noteNameInput').on('keypress', (e) => {
         if (e.which === 13) { // Enter key
-            confirmCreateJournal();
+            confirmCreateNote();
         }
     });
     
@@ -774,35 +893,36 @@ $(document).ready(() => {
     $(document).on('click', '#prevPage', goToPreviousPage);
     
     // Journal view navigation with auto-save
-    $('#backToJournalList').on('click', function() {
+    $('#backToNoteList').on('click', function() {
         console.log('Navigating back to journal list');
         
         // Collect and save data before navigation
-        collectJournalData();
-        saveJournalEntries();
-        
-        showJournalList();
+        collectNoteData();
+        saveNoteEntries();
+
+        showNoteList();
     });
     
     // Delete journal from grid (using event delegation since buttons are dynamically created)
-    $(document).on('click', '.journal-delete-btn', function(e) {
+    $(document).on('click', '.note-delete-btn', function(e) {
         e.stopPropagation(); // Prevent card click from firing
-        const journalId = $(this).attr('data-journal-id');
-        if (journalId) {
-            deleteJournal(journalId);
+        const noteId = $(this).attr('data-note-id');
+        const sceneItemId = $(this).attr('data-sceneitem-id');
+        if (noteId) {
+            deleteNote(noteId, sceneItemId);
         }
     });
     
     // Toolbar button handlers (now in fixed location)
-    $(document).on('click', '.journal-entry-toolbar .toolbar-btn[data-type="text"]', function() {
+    $(document).on('click', '.note-entry-toolbar .toolbar-btn[data-type="text"]', function() {
         // Find the journal entries container and add a new text entry
-        const journalEntriesContainer = $('#journalEntries');
-        addTextEntryToContainer(journalEntriesContainer);
+        const noteEntriesContainer = $('#noteEntries');
+        addTextEntryToContainer(noteEntriesContainer);
     });
     
-    $(document).on('click', '.journal-entry-toolbar .toolbar-btn[data-type="task"]', function() {
+    $(document).on('click', '.note-entry-toolbar .toolbar-btn[data-type="task"]', function() {
         // Store reference to the journal entries container for later use
-        window.currentJournalEntriesContainer = $('#journalEntries');
+        window.currentnoteEntriesContainer = $('#noteEntries');
         
         // Clear and show the task dialog
         $('#taskInput').val('');
@@ -815,9 +935,9 @@ $(document).ready(() => {
         document.getElementById('taskDialog').show();
     });
     
-    $(document).on('click', '.journal-entry-toolbar .toolbar-btn[data-type="reminder"]', function() {
+    $(document).on('click', '.note-entry-toolbar .toolbar-btn[data-type="reminder"]', function() {
         // Store reference to the journal entries container for later use
-        window.currentJournalEntriesContainer = $('#journalEntries');
+        window.currentnoteEntriesContainer = $('#noteEntries');
         
         // Clear and show the reminder dialog
         $('#reminderNameInput').val('');
@@ -840,10 +960,24 @@ $(document).ready(() => {
     // task checkbox handler
     $(document).on('sl-change', '.task-checkbox', function() {
         const taskItem = $(this).closest('.task-item');
+        const taskText = taskItem.find('.task-text');
         const isCompleted = $(this).prop('checked');
         console.log('task item completed status changed:', isCompleted);
+        
+        // Update CSS class and data attribute
         taskItem.toggleClass('completed', isCompleted);
         taskItem.attr('data-completed', isCompleted ? 'true' : 'false');
+        
+        // Update the inline style on the task text
+        if (isCompleted) {
+            taskText.css('text-decoration', 'line-through');
+        } else {
+            taskText.css('text-decoration', 'none');
+        }
+        
+        // Trigger auto-save
+        hasUnsavedChanges = true;
+        debouncedSave();
     });
     
     // Dialog event handlers
@@ -879,114 +1013,124 @@ $(document).ready(() => {
     });
     
     // Edit Journal modal handlers
-    $('#editJournalTitle').on('click', function() {
-        openEditJournalModal();
+    $('#editnoteTitle').on('click', function() {
+        openEditNoteModal();
     });
     
     $('#cancelEditJournal').on('click', function() {
-        closeEditJournalModal();
+        closeEditNoteModal();
     });
     
-    $('#confirmEditJournal').on('click', function() {
-        confirmEditJournal();
+    $('#confirmEditNote').on('click', function() {
+        confirmEditNote();
     });
     
     // Handle Enter key in edit journal input
-    $('#editJournalNameInput').on('keypress', function(e) {
+    $('#editnoteNameInput').on('keypress', function(e) {
         if (e.which === 13) {
-            confirmEditJournal();
+            confirmEditNote();
         }
     });
     
     // Close edit journal modal when clicking outside
-    $('#editJournalModal').on('click', function(e) {
-        if (e.target.id === 'editJournalModal') {
-            closeEditJournalModal();
+    $('#editNoteModal').on('click', function(e) {
+        if (e.target.id === 'editNoteModal') {
+            closeEditNoteModal();
         }
     });
 });
 
-function showJournalList() {
+function showNoteList() {
     // Clear current journal ID
-    currentJournalId = null;
+    currentNoteId = null;
+    
+    // Stop periodic reminder due date checking
+    stopReminderChecking();
     
     // Hide journal view and show journal list
     $('#journalView').removeClass('active');
     $('#step1').addClass('active');
 }
 
-function createNewJournal() {
+function createNewNote() {
     // Show the create journal modal
-    openCreateJournalModal();
+    opencreateNoteModal();
 }
 
-function openCreateJournalModal() {
+function opencreateNoteModal() {
     // Get current day of the week
     const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
     
     // Update the author text with current username
-    $('#journalAuthor').text(`By ${username || 'Username'}`);
-    $('#createJournalModal').addClass('active');
-    $('#journalNameInput').val(''); // Clear the input
-    $('#journalNameInput').attr('placeholder', `${currentDay} Stream Notes`); // Set dynamic placeholder
-    $('#journalNameInput').focus(); // Focus on input
+    $('#noteAuthor').text(`By ${username || 'Username'}`);
+    $('#createNoteModal').addClass('active');
+    $('#noteNameInput').val(''); // Clear the input
+    $('#noteNameInput').attr('placeholder', `${currentDay} Stream Notes`); // Set dynamic placeholder
+    $('#noteNameInput').focus(); // Focus on input
 }
 
-function closeCreateJournalModal() {
-    $('#createJournalModal').removeClass('active');
-    $('#journalNameInput').val(''); // Clear the input
+function closeCreateNoteModal() {
+    $('#createNoteModal').removeClass('active');
+    $('#noteNameInput').val(''); // Clear the input
 }
 
-function confirmCreateJournal() {
-    let journalName = $('#journalNameInput').val().trim();
+function confirmCreateNote() {
+    let noteName = $('#noteNameInput').val().trim();
     
-    if (!journalName) {
+    if (!noteName) {
         const currentDay = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-        journalName = `${currentDay} Stream Notes`;
+        noteName = `${currentDay} Stream Notes`;
     }
     
-    // Check if journal name already exists
-    const existingJournal = journalEntries.entries.find(j => j.name.toLowerCase() === journalName.toLowerCase());
-    if (existingJournal) {
+    // Check if noteEntries exists and has entries array
+    if (!noteEntries || !noteEntries.entries) {
+        console.log(noteEntries);
+        console.error('noteEntries not properly initialized');
+        showAlert('#generalAlert', 'Error', 'Note system not properly initialized. Please refresh the page.', 'danger');
+        return;
+    }
+    
+    const existingNote = noteEntries.entries.find(j => j.name.toLowerCase() === noteName.toLowerCase());
+    if (existingNote) {
         showAlert('#generalAlert', 'Name Already Exists', 'A journal with this name already exists. Please choose a different name.', 'warning');
         return;
     }
     
-    const newJournal = {
+    const newNote = {
         id: crypto.randomUUID(),
-        name: journalName,
+        name: noteName,
         creationDate: Date.now(),
         entries: []
     };
     
     // Add to entries
-    journalEntries.entries.push(newJournal);
+    noteEntries.entries.push(newNote);
     
     // Save to settings
-    streamlabs.userSettings.set('streamJournalEntries', journalEntries);
+    streamlabs.userSettings.set('streamNoteEntries', noteEntries).then(() => {
+        streamlabs.postMessage('update', {});
+    });
     
     // Close modal
-    closeCreateJournalModal();
+    closeCreateNoteModal();
     
-    populateJournalGrid();
-    // Open the newly created journal
-    showJournalView(newJournal);
+    populateNoteGrid();
+    showNoteView(newNote);
     
-    console.log('Created new journal:', newJournal);
-    //showAlert('#generalAlert', 'Journal Created', `"${journalName}" has been created successfully!`, 'success');
+    console.log('Created new note:', newNote);
 }
 
 function addTextEntryToContainer(container) {
     const currentTime = Date.now();
     const entryId = crypto.randomUUID();
     const entryHtml = `
-        <div class="journal-entry" data-entry-id="${entryId}">
+        <div class="note-entry" data-entry-id="${entryId}">
             <sl-tooltip content="Delete note">
-                <sl-button variant="danger" size="small" class="journal-entry-textarea-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                <sl-button variant="danger" size="small" class="note-entry-textarea-delete-btn" onclick="deleteNoteEntry(this)" pill>
                     <sl-icon name="trash"></sl-icon>
                 </sl-button>
             </sl-tooltip>
-            <div class="journal-entry-content">
+            <div class="note-entry-content">
                 <sl-textarea 
                     data-contentType="text"
                     data-createdAt="${currentTime}"
@@ -999,6 +1143,10 @@ function addTextEntryToContainer(container) {
     `;
     
     container.append(entryHtml);
+    
+    // Trigger auto-save
+    hasUnsavedChanges = true;
+    debouncedSave();
     
     // Focus the newly created textarea after it's rendered
     setTimeout(() => {
@@ -1064,8 +1212,8 @@ function confirmAddtask() {
         const currentTime = Date.now();
         const entryId = crypto.randomUUID();
         const entryHtml = `
-            <div class="journal-entry" data-entry-id="${entryId}">
-                <div class="journal-entry-content">
+            <div class="note-entry" data-entry-id="${entryId}">
+                <div class="note-entry-content">
                     <div class="task-item" 
                          data-contentType="task" 
                          data-createdAt="${currentTime}"
@@ -1080,7 +1228,7 @@ function confirmAddtask() {
                         </sl-tooltip>
 
                         <sl-tooltip content="Delete task">
-                            <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                            <sl-button variant="danger" size="small" class="note-entry-delete-btn" onclick="deleteNoteEntry(this)" pill>
                                 <sl-icon name="trash"></sl-icon>
                             </sl-button>
                         </sl-tooltip>
@@ -1092,7 +1240,11 @@ function confirmAddtask() {
             </div>
         `;
         
-        window.currentJournalEntriesContainer.append(entryHtml);
+        window.currentnoteEntriesContainer.append(entryHtml);
+        
+        // Trigger auto-save
+        hasUnsavedChanges = true;
+        debouncedSave();
     }
     
     document.getElementById('taskDialog').hide();
@@ -1133,6 +1285,14 @@ function confirmAddReminder() {
         editingReminderItem.attr('data-title', reminderName);
         editingReminderItem.attr('data-dueDate', dueDate.getTime());
         
+        // Check if the reminder is due and update CSS class
+        const isDue = dueDate <= new Date();
+        if (isDue) {
+            editingReminderItem.addClass('due');
+        } else {
+            editingReminderItem.removeClass('due');
+        }
+        
         // Update display content
         editingReminderItem.find('.reminder-title strong').text(reminderName);
         editingReminderItem.find('.reminder-due-date').text(`Due: ${formattedDueDate}`);
@@ -1150,10 +1310,15 @@ function confirmAddReminder() {
     } else {
         // Create new reminder
         const entryId = crypto.randomUUID();
+        
+        // Check if the reminder is due
+        const isDue = dueDate <= new Date();
+        const dueClass = isDue ? ' due' : '';
+        
         const entryHtml = `
-            <div class="journal-entry" data-entry-id="${entryId}">
-                <div class="journal-entry-content">
-                    <div class="reminder-item" 
+            <div class="note-entry" data-entry-id="${entryId}">
+                <div class="note-entry-content">
+                    <div class="reminder-item${dueClass}" 
                          data-contentType="reminder" 
                          data-createdAt="${currentTime}"
                          data-dueDate="${dueDate.getTime()}"
@@ -1167,7 +1332,7 @@ function confirmAddReminder() {
                         </sl-tooltip>
 
                         <sl-tooltip content="Delete reminder">
-                            <sl-button variant="danger" size="small" class="journal-entry-delete-btn" onclick="deleteJournalEntry(this)" pill>
+                            <sl-button variant="danger" size="small" class="note-entry-delete-btn" onclick="deleteNoteEntry(this)" pill>
                                 <sl-icon name="trash"></sl-icon>
                             </sl-button>
                         </sl-tooltip>
@@ -1184,75 +1349,81 @@ function confirmAddReminder() {
             </div>
         `;
         
-        window.currentJournalEntriesContainer.append(entryHtml);
+        window.currentnoteEntriesContainer.append(entryHtml);
+        
+        // Trigger auto-save
+        hasUnsavedChanges = true;
+        debouncedSave();
     }
     
     document.getElementById('reminderDialog').hide();
 }
 
-// Edit Journal functions
-function openEditJournalModal() {
-    if (!currentJournalId) return;
+function openEditNoteModal() {
+    if (!currentNoteId) return;
     
-    const journal = journalEntries.entries.find(j => j.id === currentJournalId);
-    if (!journal) return;
-    
-    // Pre-fill the input with current journal name
-    $('#editJournalNameInput').val(journal.name);
+    const note = noteEntries.entries.find(j => j.id === currentNoteId);
+    if (!note) return;
+
+    // Pre-fill the input with current note name
+    $('#editnoteNameInput').val(note.name);
     
     // Update the author text with current username
-    $('#editJournalAuthor').text(`By ${username || 'Username'}`);
+    $('#editnoteAuthor').text(`By ${username || 'Username'}`);
     
-    $('#editJournalModal').addClass('active');
-    $('#editJournalNameInput').focus();
+    $('#editNoteModal').addClass('active');
+    $('#editnoteNameInput').focus();
 }
 
-function closeEditJournalModal() {
-    $('#editJournalModal').removeClass('active');
-    $('#editJournalNameInput').val('');
+function closeEditNoteModal() {
+    $('#editNoteModal').removeClass('active');
+    $('#editnoteNameInput').val('');
 }
 
-function confirmEditJournal() {
-    if (!currentJournalId) return;
+function confirmEditNote() {
+    if (!currentNoteId) return;
     
-    const newJournalName = $('#editJournalNameInput').val().trim();
+    const newNoteName = $('#editnoteNameInput').val().trim();
     
-    if (!newJournalName) {
-        showAlert('#generalAlert', 'Invalid Name', 'Please enter a valid journal name.', 'warning');
+    if (!newNoteName) {
+        showAlert('#generalAlert', 'Invalid Name', 'Please enter a valid Note name.', 'warning');
         return;
     }
     
-    // Check if journal name already exists (excluding current journal)
-    const existingJournal = journalEntries.entries.find(j => 
-        j.id !== currentJournalId && 
-        j.name.toLowerCase() === newJournalName.toLowerCase()
+    // Check if Note name already exists (excluding current journal)
+    const existingNote = noteEntries.entries.find(j => 
+        j.id !== currentNoteId && 
+        j.name.toLowerCase() === newNoteName.toLowerCase()
     );
-    if (existingJournal) {
+    if (existingNote) {
         showAlert('#generalAlert', 'Name Already Exists', 'A journal with this name already exists. Please choose a different name.', 'warning');
         return;
     }
     
     // Find and update the journal
-    const journalIndex = journalEntries.entries.findIndex(j => j.id === currentJournalId);
-    if (journalIndex === -1) return;
+    const noteIndex = noteEntries.entries.findIndex(j => j.id === currentNoteId);
+    if (noteIndex === -1) return;
     
-    const oldName = journalEntries.entries[journalIndex].name;
-    journalEntries.entries[journalIndex].name = newJournalName;
+    const oldName = noteEntries.entries[noteIndex].name;
+    noteEntries.entries[noteIndex].name = newNoteName;
     
     // Save updated entries to settings
-    streamlabs.userSettings.set('streamJournalEntries', journalEntries);
+    streamlabs.userSettings.set('streamNoteEntries', noteEntries).then(() => {
+        streamlabs.postMessage('update', {});
+    });
+    
     
     // Update the UI
-    $('#journalTitle').text(newJournalName);
+    $('#noteTitle').text(newNoteName);
     
     // Refresh the journal grid to update the title there as well
-    populateJournalGrid();
+    populateNoteGrid();
     
     // Close modal
-    closeEditJournalModal();
+    closeEditNoteModal();
     
-    console.log(`Updated journal name from "${oldName}" to "${newJournalName}"`);
-    showAlert('#generalAlert', 'Journal Updated', `Journal name updated to "${newJournalName}" successfully!`, 'success');
+    console.log(`Updated Note name from "${oldName}" to "${newNoteName}"`);
+    showAlert('#generalAlert', 'Note Updated', `Note name updated to "${newNoteName}" successfully!`, 'success');
 }
 
 // Auto-save event bindings for input changes
@@ -1272,7 +1443,7 @@ $(document).ready(function() {
     });
     
     // Trigger auto-save on any other input changes within journal entries
-    $(document).on('input change', '#journalEntries input, #journalEntries textarea, #journalEntries sl-input, #journalEntries sl-textarea', function() {
+    $(document).on('input change', '#noteEntries input, #noteEntries textarea, #noteEntries sl-input, #noteEntries sl-textarea', function() {
         console.log('Input changed, triggering auto-save');
         hasUnsavedChanges = true;
         debouncedSave();
@@ -1328,11 +1499,12 @@ window.edittask = function(button) {
     $('#taskDialog')[0].show();
 };
 
-// Delete Journal Entry Function
-window.deleteJournalEntry = function(button) {
-    if (confirm('Are you sure you want to delete this entry? This action cannot be undone.')) {
-        const journalEntry = $(button).closest('.journal-entry');
-        journalEntry.remove();
+// Delete Note Entry Function
+window.deleteNoteEntry = function(button) {
+
+    if (confirm('Are you sure you want to delete this note? This action cannot be undone.')) {
+        const noteEntry = $(button).closest('.note-entry');
+        noteEntry.remove();
         
         // Trigger auto-save
         hasUnsavedChanges = true;
